@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>16-Team Badminton Tournament - WhatsApp Live</title>
+  <style>
+    body { font-family: sans-serif; background: #f4f7f6; margin: 0; padding: 16px; color: #1f2937; }
+    h1 { text-align: center; color: #0f766e; margin-bottom: 8px; }
+    .sub { text-align: center; color: #4b5563; margin-bottom: 16px; font-size: 14px; }
+    .champion-banner {
+      max-width: 900px;
+      margin: 0 auto 18px;
+      background: #ecfdf5;
+      border: 2px solid #16a34a;
+      color: #14532d;
+      padding: 12px 16px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 16px;
+      display: none;
+    }
+    .controls { max-width: 1000px; margin: 0 auto 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    button { background: #0f766e; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    button.secondary { background: #475569; }
+    button.wa { background: #16a34a; }
+    button.wa-link { background: #059669; }
+    button:hover { opacity: 0.92; }
+    .grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+    .round { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .round h3 { margin: 0 0 10px; font-size: 16px; color: #0f766e; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+    .match { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #fafafa; }
+    .team-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; padding: 3px 4px; border-radius: 4px; }
+    .team-row.winner-row { background: #dcfce7; }
+    .team-name { font-weight: 600; font-size: 14px; flex: 1; }
+    .winner { color: #15803d; }
+    input[type="number"] { width: 58px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; }
+    .save-btn { width: 100%; padding: 6px; font-size: 13px; background: #0284c7; }
+  </style>
+</head>
+<body>
+  <h1>🏸 16-ടീം ബാഡ്മിൻ്റൺ ടൂർണമെൻ്റ്</h1>
+  <div class="sub">സ്കോർ സേവ് ചെയ്ത ശേഷം വാട്‌സാപ്പിൽ ലൈവ് റിസൾട്ടോ പേജ് ലിങ്കോ എളുപ്പത്തിൽ ഷെയർ ചെയ്യാം.</div>
+
+  <div class="champion-banner" id="championBanner"></div>
+
+  <div class="controls">
+    <button onclick="renameTeams()">ടീമിൻ്റെ പേരുകൾ മാറ്റുക</button>
+    <button class="wa" onclick="shareLiveResultWhatsApp()">📲 വാട്‌സാപ്പിൽ ലൈവ് റിസൾട്ട് അയക്കുക</button>
+    <button class="wa-link" onclick="sharePageLinkWhatsApp()">🔗 വാട്‌സാപ്പിൽ ലിങ്ക് ഷെയർ ചെയ്യുക</button>
+    <button class="secondary" onclick="resetTournament()">റീസെറ്റ് ചെയ്യുക</button>
+  </div>
+
+  <div class="grid" id="bracket"></div>
+
+  <script>
+    const roundNames = ["റൗണ്ട് ഓഫ് 16", "ക്വാർട്ടർ ഫൈനൽ", "സെമി ഫൈനൽ", "ഫൈനൽ"];
+    let teams = Array.from({ length: 16 }, (_, i) => `Team ${i + 1}`);
+    let bracket = [];
+
+    function initBracket() {
+      bracket = [];
+      let currentTeams = [...teams];
+      for (let r = 0; r < 4; r++) {
+        const matches = [];
+        for (let m = 0; m < currentTeams.length / 2; m++) {
+          matches.push({
+            t1: r === 0 ? currentTeams[m * 2] : "TBD",
+            t2: r === 0 ? currentTeams[m * 2 + 1] : "TBD",
+            s1: "",
+            s2: "",
+            winner: null
+          });
+        }
+        bracket.push(matches);
+        currentTeams = new Array(matches.length).fill("TBD");
+      }
+      render();
+    }
+
+    function clearDownstream(r, m) {
+      if (r + 1 >= bracket.length) return;
+      const nextR = r + 1;
+      const nextM = Math.floor(m / 2);
+      const nextMatch = bracket[nextR][nextM];
+      const oldSlotTeam = m % 2 === 0 ? nextMatch.t1 : nextMatch.t2;
+
+      if (m % 2 === 0) nextMatch.t1 = "TBD";
+      else nextMatch.t2 = "TBD";
+
+      if (nextMatch.winner === oldSlotTeam) {
+        nextMatch.winner = null;
+        nextMatch.s1 = "";
+        nextMatch.s2 = "";
+        clearDownstream(nextR, nextM);
+      }
+    }
+
+    function saveMatch(r, m) {
+      const s1Val = document.getElementById(`s1-${r}-${m}`).value;
+      const s2Val = document.getElementById(`s2-${r}-${m}`).value;
+      if (s1Val === "" || s2Val === "") return alert("രണ്ട് ടീമുകളുടെയും സ്കോർ നൽകുക!");
+
+      const s1 = Number(s1Val);
+      const s2 = Number(s2Val);
+      if (s1 < 0 || s2 < 0) return alert("സ്കോർ പൂജ്യത്തിലോ അതിൽ കൂടുതലോ ആയിരിക്കണം.");
+      if (s1 === s2) return alert("സമനില (Tie) അനുവദനീയമല്ല. വിജയിയെ കണ്ടെത്തുക.");
+
+      const match = bracket[r][m];
+      if (match.t1 === "TBD" || match.t2 === "TBD") return alert("മുൻ റൗണ്ടിലെ വിജയികൾ വന്നതിന് ശേഷം സ്കോർ നൽകുക.");
+
+      const prevWinner = match.winner;
+      match.s1 = s1;
+      match.s2 = s2;
+      match.winner = s1 > s2 ? match.t1 : match.t2;
+
+      if (prevWinner && prevWinner !== match.winner) {
+        clearDownstream(r, m);
+      }
+
+      if (r + 1 < bracket.length) {
+        const nextMatch = bracket[r + 1][Math.floor(m / 2)];
+        if (m % 2 === 0) nextMatch.t1 = match.winner;
+        else nextMatch.t2 = match.winner;
+      }
+      render();
+    }
+
+    function buildWhatsAppSummary() {
+      let msg = "🏸 *16-ടീം ബാഡ്മിൻ്റൺ ടൂർണമെൻ്റ് - ലൈവ് റിസൾട്ട്*\n\n";
+      const champion = bracket[3]?.[0]?.winner;
+      if (champion) {
+        msg += `🏆 *ചാമ്പ്യൻ: ${champion}*\n\n`;
+      }
+
+      bracket.forEach((matches, r) => {
+        msg += `*${roundNames[r]}*\n`;
+        matches.forEach((match, idx) => {
+          const scoreText = (match.s1 !== "" && match.s2 !== "") ? ` (${match.s1} - ${match.s2})` : "";
+          const winText = match.winner ? ` -> ✅ *${match.winner}*` : "";
+          msg += `${idx + 1}. ${match.t1} vs ${match.t2}${scoreText}${winText}\n`;
+        });
+        msg += "\n";
+      });
+
+      if (window.location.href && window.location.href.startsWith("http")) {
+        msg += `🔗 ലിങ്ക്: ${window.location.href}`;
+      }
+      return msg.trim();
+    }
+
+    function shareLiveResultWhatsApp() {
+      const text = encodeURIComponent(buildWhatsAppSummary());
+      window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+    }
+
+    function sharePageLinkWhatsApp() {
+      const currentUrl = window.location.href;
+      if (!currentUrl || !currentUrl.startsWith("http")) {
+        alert("ഈ ഫയൽ ഒരു വെബ് ഹോസ്റ്റിംഗിൽ (ഉദാ: GitHub Pages, Netlify) അപ്‌ലോഡ് ചെയ്തതിന് ശേഷം തുറക്കുമ്പോഴാണ് നേരിട്ട് ഷെയർ ചെയ്യാൻ പറ്റുന്ന ലിങ്ക് ലഭിക്കുന്നത്.");
+        return;
+      }
+      const text = encodeURIComponent(`🏸 16-ടീം ബാഡ്മിൻ്റൺ ടൂർണമെൻ്റ് ലൈവ് അപ്ഡേറ്റുകൾ ഇവിടെ കാണാം:\n${currentUrl}`);
+      window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+    }
+
+    function renameTeams() {
+      const oldTeams = [...teams];
+      for (let i = 0; i < 16; i++) {
+        const name = prompt(`Team ${i + 1} - പുതിയ പേര് നൽകുക:`, teams[i]);
+        if (name && name.trim()) teams[i] = name.trim();
+      }
+
+      bracket.forEach((matches, r) => {
+        matches.forEach((match, m) => {
+          if (r === 0) {
+            match.t1 = teams[m * 2];
+            match.t2 = teams[m * 2 + 1];
+          }
+          oldTeams.forEach((oldName, idx) => {
+            const newName = teams[idx];
+            if (oldName !== newName) {
+              if (match.t1 === oldName) match.t1 = newName;
+              if (match.t2 === oldName) match.t2 = newName;
+              if (match.winner === oldName) match.winner = newName;
+            }
+          });
+        });
+      });
+
+      render();
+    }
+
+    function resetTournament() {
+      if (confirm("ടൂർണമെൻ്റ് പൂർണ്ണമായും റീസെറ്റ് ചെയ്യണോ?")) initBracket();
+    }
+
+    function renderChampion() {
+      const banner = document.getElementById("championBanner");
+      const finalMatch = bracket[3]?.[0];
+      if (finalMatch && finalMatch.winner) {
+        banner.style.display = "block";
+        banner.textContent = `🏆 ടൂർണമെൻ്റ് ചാമ്പ്യൻ: ${finalMatch.winner} 🏆`;
+      } else {
+        banner.style.display = "none";
+        banner.textContent = "";
+      }
+    }
+
+    function render() {
+      const container = document.getElementById("bracket");
+      container.innerHTML = "";
+      bracket.forEach((matches, r) => {
+        const col = document.createElement("div");
+        col.className = "round";
+        col.innerHTML = `<h3>${roundNames[r]}</h3>`;
+
+        matches.forEach((match, m) => {
+          const isW1 = match.winner && match.winner === match.t1;
+          const isW2 = match.winner && match.winner === match.t2;
+          const div = document.createElement("div");
+          div.className = "match";
+          div.innerHTML = `
+            <div class="team-row ${isW1 ? "winner-row" : ""}">
+              <span class="team-name ${isW1 ? "winner" : ""}">${match.t1} ${isW1 ? "🏆" : ""}</span>
+              <input id="s1-${r}-${m}" type="number" min="0" value="${match.s1}" />
+            </div>
+            <div class="team-row ${isW2 ? "winner-row" : ""}">
+              <span class="team-name ${isW2 ? "winner" : ""}">${match.t2} ${isW2 ? "🏆" : ""}</span>
+              <input id="s2-${r}-${m}" type="number" min="0" value="${match.s2}" />
+            </div>
+            <button class="save-btn" onclick="saveMatch(${r}, ${m})">Save Result</button>
+          `;
+          col.appendChild(div);
+        });
+        container.appendChild(col);
+      });
+      renderChampion();
+    }
+
+    initBracket();
+  </script>
+</body>
+</html>
